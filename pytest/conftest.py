@@ -7,6 +7,13 @@ from deepeval.metrics.utils import models as metric_models
 from dotenv import load_dotenv
 from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
+from langchain_community.document_loaders import WebBaseLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_openai import OpenAIEmbeddings
+from langchain_chroma import Chroma
+
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
 
 load_dotenv()
 
@@ -57,3 +64,81 @@ def llm(request):
         num_predict=250,
         reasoning=False,
     )
+
+
+def read_url(url):
+    loader = WebBaseLoader(url)
+    documents = loader.load()
+    return documents
+
+
+def split_into_chunks(documents):
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1000,
+        chunk_overlap=200,
+    )
+    chunks = splitter.split_documents(documents)
+    print("Number of chunks:", len(chunks))
+    return chunks
+
+
+def make_embeddings():
+    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+    return embeddings
+
+
+def save_in_chroma(chunks, embeddings):
+    vector_store = Chroma.from_documents(
+        documents=chunks,
+        embedding=embeddings,
+        persist_directory="./chroma_langchain_db_openai",
+        collection_name="webpage_rag_openai_test",
+    )
+    return vector_store
+
+
+def make_retriever(vector_store):
+    retriever = vector_store.as_retriever(
+        search_type="similarity",
+        search_kwargs={"k": 3},
+    )
+    return retriever
+
+
+def join_chunks(documents):
+    text = "\n\n".join(document.page_content for document in documents)
+    return text
+
+
+def make_answer_chain(retriever, llm):
+    prompt = ChatPromptTemplate.from_template(
+        """Use only the context below to answer the question.
+        If the answer is not in the context, say: I don't know based on the documents.
+
+    Context:
+    {context}
+
+Question: {question}
+Answer:""")
+
+    chain = (
+        {
+            "context": retriever | join_chunks,
+            "question": lambda question: question,
+        }
+        | prompt
+        | llm
+        | StrOutputParser()
+    )
+    return chain
+
+
+@pytest.fixture(scope="session")
+def rag_app(llm):
+    documents = read_url("https://www.descope.com/learn/post/mcp")
+    chunks = split_into_chunks(documents)
+    embeddings = make_embeddings()
+    vector_store = save_in_chroma(chunks, embeddings)
+    retriever = make_retriever(vector_store)
+    chain = make_answer_chain(retriever, llm)
+    return chain
