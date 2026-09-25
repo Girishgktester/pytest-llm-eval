@@ -1,3 +1,4 @@
+import logging
 import os
 
 import deepeval
@@ -16,6 +17,10 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+REFERENCE = "An MCP server is a lightweight program that exposes tools, resources, and prompts."
 
 
 def pytest_addoption(parser):
@@ -45,6 +50,17 @@ def pytest_configure(config):
         deepeval.login(api_key=confident_key)
 
 
+def pytest_sessionstart(session):
+    mode = session.config.getoption("--llm-mode")
+    logger.info("running ===============================%s================", mode)
+
+
+@pytest.fixture(autouse=True)
+def log_llm_mode(request):
+    mode = request.config.getoption("--llm-mode")
+    logger.info("running ===============================%s================", mode)
+
+
 @pytest.fixture(scope="session")
 def llm(request):
     mode = request.config.getoption("--llm-mode")
@@ -54,7 +70,7 @@ def llm(request):
             model=os.getenv("OPENAI_MODEL_NAME", "gpt-4o-mini"),
             api_key=os.getenv("OPENAI_API_KEY"),
             temperature=0.5,
-            max_tokens=250,
+            max_tokens=2500,
         )
 
     return ChatOllama(
@@ -134,15 +150,23 @@ Answer:""")
 
 
 @pytest.fixture(scope="session")
-def rag_app(llm):
+def rag_retriever(llm):
     documents = read_url("https://www.descope.com/learn/post/mcp")
     chunks = split_into_chunks(documents)
     embeddings = make_embeddings()
     vector_store = save_in_chroma(chunks, embeddings)
-    retriever = make_retriever(vector_store)
-    chain = make_answer_chain(retriever, llm)
-    return chain
+    return make_retriever(vector_store)
+
+
+@pytest.fixture(scope="session")
+def rag_app(rag_retriever, llm):
+    return make_answer_chain(rag_retriever, llm)
 
 
 def ask_rag_app(chain, message):
     return chain.invoke(message)
+
+
+def get_rag_contexts(retriever, message):
+    docs = retriever.invoke(message)
+    return [doc.page_content for doc in docs]

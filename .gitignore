@@ -2,5 +2,6 @@
 .venv/
 .pytest_cache/
 .deepeval/
+.commandcode/
 __pycache__/
 *.py[cod]
