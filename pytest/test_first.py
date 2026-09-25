@@ -1,6 +1,9 @@
 from deepeval import assert_test, evaluate
 from deepeval.metrics import AnswerRelevancyMetric, GEval
+
 from deepeval.test_case import LLMTestCase, SingleTurnParams
+
+from conftest import ask_rag_app
 
 class TestAnswerRelevancy: 
     def test_answer_relevancy(self, llm):
@@ -19,7 +22,7 @@ class TestAnswerRelevancy:
 class TestRAG:
     def test_rag(self, rag_app):
         question = "What is an MCP server?"
-        answer = rag_app.invoke(question)
+        answer = ask_rag_app(rag_app, question)
         print("MCP answer:", answer)
 
         text = answer.lower()
@@ -44,6 +47,6 @@ class TestRAG:
         )
         assert_test(test_case, [correctness])
         results = evaluate(
-            test_cases=[test_case], metrics=[correctness]
+            test_cases=[test_case], metrics=[AnswerRelevancyMetric(), correctness]
         )
         print(results)

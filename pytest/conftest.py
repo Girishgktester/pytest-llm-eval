@@ -142,3 +142,7 @@ def rag_app(llm):
     retriever = make_retriever(vector_store)
     chain = make_answer_chain(retriever, llm)
     return chain
+
+
+def ask_rag_app(chain, message):
+    return chain.invoke(message)
