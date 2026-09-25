@@ -91,6 +91,7 @@ pandas==3.0.6
 pillow==12.3.0
 pluggy==1.6.0
 portalocker==4.4.0
+pywin32==312
 posthog==7.60.0
 prompt_toolkit==3.0.53
 propcache==0.5.4
